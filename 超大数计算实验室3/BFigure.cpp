@@ -3,7 +3,11 @@
 /*
 该源文件私有的方法
 */
-int _FindDecimalPoint(const char *NumString, int length);
+static int _FindDecimalPoint(const char *NumString, int length);
+
+static int _ItoA(int Num, char *buffer, int size);
+static void _ChunktoStr_Float(int ChunkNum, char *buffer);
+static void _ChunktoStr_Int(int ChunkNum, char *buffer);
 
 /*
 约定:
@@ -160,6 +164,41 @@ void BFigure::StrToFig_Float(std::string String)
 }
 
 /*
+将对象中的数字转为字符串返回
+*/
+std::string BFigure::toString()
+{
+	char ChunkTemp[9];
+	char *returnVal;
+	if (*flag)
+		returnVal = new char[_GetRealLength_Int(*this) + _GetRealLength_Float(*this) +3 + *this->Minus]();
+	else
+		returnVal = new char[_GetRealLength_Int(*this) + 1 + *this->Minus]();
+
+	returnVal[0] = 0;
+	if (*ChunkInt_C&&*ChunkInt) {		//显示整数部分
+		for (int a = *ChunkInt_C - 1; a >= 0; a--) {
+			_ChunktoStr_Int(ChunkInt[a], ChunkTemp);
+			strcat(returnVal, ChunkTemp);
+		}
+	}
+
+	if (*flag&&*ChunkFloat_C) {			//是一个小数,显示小数部分
+		strcat(returnVal, ".");
+		for (int a = 0; a < *ChunkFloat_C; a++) {
+			_ChunktoStr_Float(ChunkFloat[a], ChunkTemp);
+			strcat(returnVal, ChunkTemp);
+		}
+	}
+	
+
+	std::string re = std::string(returnVal);
+	delete returnVal;
+
+	return re;
+}
+
+/*
 任意整数的加法
 只能计算整数,如果传入浮点数将会忽略小数点后的数字
 本函数主要用于调配和处理正负号
@@ -217,7 +256,6 @@ void Add_Float(BFigure & Result, const BFigure & OperandA, const BFigure & Opera
 	}
 	*Result.flag = 1;
 }
-
 
 /*
 整数部分的加法核心(不安全)
@@ -312,7 +350,6 @@ int _Add_Float(BFigure &Result, const BFigure &OperandA, const BFigure &OperandB
 	return carry;
 }
 
-
 /*
 将字符串转换为Figure对象
 约定:如果传入的字符串含有多个负号,则只读取最后一个负号后面的内容
@@ -404,7 +441,6 @@ void BFigure::_StrToFig_Float(std::string String, int start_index, int end_index
 	return;
 }
 
-
 /*
 临时函数的存储区
 */
@@ -486,6 +522,9 @@ BFigure & BFigure::operator=(std::string NumString)
 	return *this;
 }
 
+/*
+重载加号运算符,使之支持BFigure+Bfigure
+*/
 BFigure BFigure::operator+(const BFigure & rhs)
 {
 	int l_len = _GetRealLength_Int(*this);
@@ -496,7 +535,7 @@ BFigure BFigure::operator+(const BFigure & rhs)
 	r_len = _GetRealLength_Float(rhs);
 	int max_len_f = l_len > r_len ? l_len : r_len;	//浮点位不会增加
 
-													//初始化一个可以装得下结果的BFigure对象
+	//初始化一个可以装得下结果的BFigure对象
 	BFigure Result((max_len_i / 4), (max_len_f / 8) + 1);
 
 	if (*this->flag || *rhs.flag)
@@ -602,7 +641,7 @@ int _GetRealLength_Float(const BFigure & Figure)
 /*
 约定:找最后一个".",不是最后一个,没找到返回-1
 */
-int _FindDecimalPoint(const char *NumString, int length)
+static int _FindDecimalPoint(const char *NumString, int length)
 {
 	int a;
 	for (a = length - 1; a >= 0; a--) {
@@ -611,4 +650,69 @@ int _FindDecimalPoint(const char *NumString, int length)
 		}
 	}
 	return a;
+}
+
+//************************内部函数定义区********************************
+
+/*
+将整数块进行输出,
+传入的buffer应大小大于5
+
+*/
+static void _ChunktoStr_Int(int ChunkNum, char *buffer)
+{
+	if (ChunkNum > 999) {
+		_ItoA(ChunkNum, buffer, 5);
+	}
+	else if (ChunkNum > 99) {
+		buffer[0] = '0';
+		_ItoA(ChunkNum, buffer + 1, 4);
+	}
+	else if (ChunkNum > 9) {
+		buffer[0] = '0';
+		buffer[1] = '0';
+		_ItoA(ChunkNum, buffer + 2, 3);
+	}
+	else if (ChunkNum >= 0) {
+		buffer[0] = '0';
+		buffer[1] = '0';
+		buffer[2] = '0';
+		_ItoA(ChunkNum, buffer + 3, 2);
+	}
+	return;
+}
+
+/*
+将浮点块转化为字符串
+请务必传入一个9位数的
+*/
+static void _ChunktoStr_Float(int ChunkNum, char *buffer)
+{
+	int len = 7;
+	int a = _ItoA(ChunkNum, buffer, 9) - 1;
+	while (a >= 0)
+		buffer[a--] = '0';
+	while (buffer[len] == '0'&&len > 0)
+		len--;
+	buffer[len + 1] = 0;
+	return;
+}
+
+/*
+将数字转化为字符串
+返回值是一个char*的偏移
+请使用buffer+_ItoA()的形式来调用此函数
+*/
+static int _ItoA(int Num, char *buffer, int size)
+{
+	int a = size - 2;
+	buffer[size - 1] = 0;
+	buffer[a--] = Num % 10 + '0';
+	Num /= 10;
+	while (Num)
+	{
+		buffer[a--] = Num % 10 + '0';
+		Num /= 10;
+	}
+	return a + 1;
 }
