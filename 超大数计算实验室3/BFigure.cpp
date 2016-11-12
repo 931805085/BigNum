@@ -4,10 +4,10 @@
 该源文件私有的方法
 */
 static int _FindDecimalPoint(const char *NumString, int length);
-
 static int _ItoA(int Num, char *buffer, int size);
 static void _ChunktoStr_Float(int ChunkNum, char *buffer);
 static void _ChunktoStr_Int(int ChunkNum, char *buffer);
+static int _CompareNumString(const char *StringA, const char *StringB);
 
 /*
 约定:
@@ -55,11 +55,16 @@ BFigure::BFigure(int ChunkIntCount)
 */
 BFigure::BFigure(int ChunkIntCount, int ChunkFloatCount)
 {
-	flag = new FLAG(1);								//设置为浮点数
-	ChunkInt = new int[ChunkIntCount]();			//初始化整数块
-	ChunkFloat = new int[ChunkFloatCount]();		//初始化浮点块
-	ChunkInt_C = new int(ChunkIntCount);
 	ChunkFloat_C = new int(ChunkFloatCount);
+	ChunkInt_C = new int(ChunkIntCount);
+	ChunkInt = new int[ChunkIntCount]();			//初始化整数块
+	if (ChunkFloatCount) {
+		flag = new FLAG(1);							//设置为浮点数
+		ChunkFloat = new int[ChunkFloatCount]();	//初始化浮点块
+	}
+	else
+		flag = new FLAG(0);	//当ChunkFloatCount为0时,也将BFigure初始化为一个整数
+
 	pFigureCount = new int(1);						//初始化引用计数				
 	Minus = new FLAG(0);
 }
@@ -147,7 +152,6 @@ void BFigure::StrToFig_Int(std::string String)
 	_StrToFig_Int(String, 0, (int)(String.length() - 1));
 }
 
-
 /*
 将字符串转换为Figure对象
 约定:如果传入的字符串含有多个负号,则只读取最后一个负号后面的内容
@@ -171,7 +175,7 @@ std::string BFigure::toString()
 	char ChunkTemp[9];
 	char *returnVal;
 	if (*flag)
-		returnVal = new char[_GetRealLength_Int(*this) + _GetRealLength_Float(*this) +3 + *this->Minus]();
+		returnVal = new char[_GetRealLength_Int(*this) + _GetRealLength_Float(*this) + 3 + *this->Minus]();
 	else
 		returnVal = new char[_GetRealLength_Int(*this) + 1 + *this->Minus]();
 
@@ -190,7 +194,7 @@ std::string BFigure::toString()
 			strcat(returnVal, ChunkTemp);
 		}
 	}
-	
+
 
 	std::string re = std::string(returnVal);
 	delete returnVal;
@@ -216,9 +220,13 @@ void Add_Int(BFigure & Result, const BFigure & OperandA, const BFigure & Operand
 	}
 	else if ((!MinusA) && MinusB) {
 		//A正B负
+		//if ()
+		_Sub_Int(Result, OperandA, OperandB, 0);
 	}
 	else if (MinusA && (!MinusB)) {
 		//A负B正
+		_Sub_Int(Result, OperandB, OperandA, 0);
+
 	}
 	else {
 		//两个正数
@@ -255,6 +263,106 @@ void Add_Float(BFigure & Result, const BFigure & OperandA, const BFigure & Opera
 		*Result.Minus = 0;
 	}
 	*Result.flag = 1;
+}
+
+/*
+整数部分的减法核心(不安全)
+不支持负号,且必须满足OperandA>=OperandB
+不判断Result容量是否充足,请保证Result容量充足
+*/
+void _Sub_Int(BFigure & Result, const BFigure & OperandA, const BFigure & OperandB, int borrow)
+{
+	int Amax_p, Bmax_p, R_p;			//分别是OperandA和OperandB的最大下标及结果的浮标
+
+	Amax_p = *OperandA.ChunkInt_C - 1;
+	Bmax_p = *OperandB.ChunkInt_C - 1;
+
+	for (R_p = 0; R_p <= Amax_p&&R_p <= Bmax_p; R_p++) {
+		Result.ChunkInt[R_p] = OperandA.ChunkInt[R_p] - OperandB.ChunkInt[R_p] - borrow;
+		if (Result.ChunkInt[R_p] < 0) {
+			borrow = (-Result.ChunkInt[R_p]) / 10000 + 1;
+			Result.ChunkInt[R_p] += 10000;
+		}
+		else borrow = 0;
+	}
+	while (R_p <= Amax_p) {
+		Result.ChunkInt[R_p] = OperandA.ChunkInt[R_p] - borrow;
+		if (Result.ChunkInt[R_p] < 0) {
+			borrow = (-Result.ChunkInt[R_p]) / 10000 + 1;
+			Result.ChunkInt[R_p] += 10000;
+		}
+		else borrow = 0;
+		R_p++;
+	}
+	/*
+	while (R_p <= Bmax_p)
+	{
+		Result.ChunkInt[R_p] = OperandB.ChunkInt[R_p] + borrow;
+		if (Result.ChunkInt[R_p] > 9999)
+		{
+			carry = Result.ChunkInt[R_p] / 10000;
+			Result.ChunkInt[R_p] %= 10000;
+		}
+		else carry = 0;
+		R_p++;
+	}
+	*/
+	if (borrow)
+		Result.ChunkInt[R_p++] = borrow;
+	while (R_p < *Result.ChunkInt_C)
+		Result.ChunkInt[R_p++] = 0;
+	return;
+}
+
+/*
+浮点数部分减法核心(不安全)
+不支持负号
+不判断Result容量是否充足,请保证Result容量充足
+返回值为向整数块的借位数
+*/
+int _Sub_Float(BFigure & Result, const BFigure & OperandA, const BFigure & OperandB)
+{
+	int Amax_p, Bmax_p, R_p;
+
+	Amax_p = *OperandA.ChunkFloat_C - 1;
+	Bmax_p = *OperandB.ChunkFloat_C - 1;
+	R_p = *Result.ChunkFloat_C - 1;
+
+	Amax_p = Amax_p >= 0 && *OperandA.flag ? Amax_p : -1;//如果是整数,则将该值设置为-1;
+	Bmax_p = Bmax_p >= 0 && *OperandB.flag ? Bmax_p : -1;//如果是整数,则将该值设置为-1;
+
+	if (Amax_p == -1 && Bmax_p == -1) return 0;
+	for (int a = R_p; a > Amax_p&&a > Bmax_p; a--)		//刷新Result最后的0
+		Result.ChunkFloat[a] = 0;
+
+	int borrow = 0;							//借位初始化
+	if (Amax_p > Bmax_p) {					//找出没有数可以相减的情况
+		//如果OperandA的位数大于OperandB的位数
+		while (Amax_p > Bmax_p&&Bmax_p >= -1) {
+			Result.ChunkFloat[Amax_p] = OperandA.ChunkFloat[Amax_p];
+			Amax_p--;
+		}
+	}
+	else {
+		//如果OperandB的位数大于OperandA的位数
+		while (Amax_p < Bmax_p&&Amax_p >= -1) {
+			Result.ChunkFloat[Bmax_p] = 100000000 - OperandB.ChunkFloat[Bmax_p] - borrow;
+			Bmax_p--;
+			borrow = 1;
+		}
+	}
+
+	//运行到这里,已经可以确保Amax_p==Bmax_p了
+	while (Amax_p >= 0) {
+		Result.ChunkFloat[Amax_p] = OperandA.ChunkFloat[Amax_p] - OperandB.ChunkFloat[Amax_p] - borrow;
+		if (Result.ChunkFloat[Amax_p] < 0) {
+			Result.ChunkFloat[Amax_p] *= -1;
+			borrow = Result.ChunkFloat[Amax_p] / 100000000 + 1;
+			Result.ChunkFloat[Amax_p] = 100000000 - Result.ChunkFloat[Amax_p];
+		}
+		Amax_p--;
+	}
+	return borrow;
 }
 
 /*
@@ -505,7 +613,7 @@ BFigure & BFigure::operator=(std::string NumString)
 {
 	int Stringlen = NumString.length();
 	int P_p = _FindDecimalPoint(NumString.c_str(), Stringlen);		//获取小数点的位置
-	if (P_p == -1) P_p = Stringlen;
+	if (P_p == -1) P_p = Stringlen, *this->flag = 0;
 
 	if (P_p > *ChunkInt_C * 4) {
 		if (ChunkInt) delete[] ChunkInt;
@@ -545,6 +653,11 @@ BFigure BFigure::operator+(const BFigure & rhs)
 	return Result;
 }
 
+BFigure BFigure::operator-(const BFigure & rhs)
+{
+	return BFigure();
+}
+
 /*
 BFigure对象复制函数
 将Source复制到destin,复制后destin完全一样
@@ -582,11 +695,13 @@ void BFigureCopyer(BFigure &destin, const BFigure &Source, int CompleteCopy)
 
 }
 
+//************************内部函数定义区********************************
+
 /*
 取得Figure中的整数部分的有效位数
 返回值是以位计算的,不是块
 */
-int _GetRealLength_Int(const BFigure &Figure)
+static int _GetRealLength_Int(const BFigure &Figure)
 {
 	bool flg = 1;
 	int Count = 0;
@@ -613,7 +728,7 @@ int _GetRealLength_Int(const BFigure &Figure)
 取得Figure中的浮点部分的有效位数
 返回值是以位计算的, 不是块
 */
-int _GetRealLength_Float(const BFigure & Figure)
+static int _GetRealLength_Float(const BFigure & Figure)
 {
 	int A_p = *Figure.ChunkFloat_C - 1;
 	if (!*Figure.ChunkFloat_C) return 0;
@@ -651,8 +766,6 @@ static int _FindDecimalPoint(const char *NumString, int length)
 	}
 	return a;
 }
-
-//************************内部函数定义区********************************
 
 /*
 将整数块进行输出,
@@ -715,4 +828,111 @@ static int _ItoA(int Num, char *buffer, int size)
 		Num /= 10;
 	}
 	return a + 1;
+}
+
+/*
+字符串数字比较函数
+只允许纯数字,否则会出错
+返回  1 表示 StringA和StringB相同位数,但StringA > StringB
+返回 -1 表示 StringA和StringB相同位数,但StringA < StringB
+返回 100表示 StringA>>StringB
+返回-100表示 StringA<<StringB
+返回  0 表示 StringA==StringB
+*/
+static int _CompareNumString(const char *StringA, const char *StringB)
+{
+	int Alen = strlen(StringA);
+	int Blen = strlen(StringB);
+
+	if (Alen == Blen)
+	{
+		//位数相同
+		int a = 0;
+		while (StringA[a] == StringB[a] && a < Alen)		//执行到不相等,然后进行判断 
+			a++;
+		if (StringA[a] > StringB[a])
+			return 1;
+		else if (StringA[a] < StringB[a])
+			return -1;
+		else return 0;
+	}
+	else if (Alen > Blen)
+		return 100;
+	else
+		return -100;
+}
+
+/*
+比较两个BFigure的大小
+OperandA>OperandB
+*/
+int CompareBFigure(const BFigure &OperandA, const BFigure &OperandB)
+{
+	int A_p = *OperandA.ChunkInt_C - 1;
+	while (!OperandA.ChunkInt[A_p] && A_p > 0)		//取得A最高位的下标
+		A_p--;
+
+	int B_p = *OperandB.ChunkInt_C - 1;
+	while (!OperandB.ChunkInt[B_p] && B_p > 0)		//取得B最高位的下标
+		B_p--;
+
+	int ReturnPlus;
+	if (*OperandA.Minus&&*OperandB.Minus)
+		ReturnPlus = -1;
+	else if (*OperandA.Minus&&*OperandB.Minus == 0)
+		return -1;
+	else if (*OperandA.Minus == 0 && *OperandB.Minus)
+		return 1;
+	else ReturnPlus = 1;
+
+	if (A_p > B_p)
+		return ReturnPlus;		//A远大于B
+	else if (A_p < B_p)
+		return ReturnPlus*-1;	//B远大于A
+	else {
+		//A和B具有相同的有效块数目,需要进一步比较
+		//A_p和B_p相等之后,只区A_p来计数
+		while (A_p >= 0 && OperandA.ChunkInt[A_p] == OperandB.ChunkInt[A_p])
+			A_p--;
+		if (OperandA.ChunkInt[A_p] > OperandB.ChunkInt[A_p])
+			return ReturnPlus;					//A>B
+		else if (OperandA.ChunkInt[A_p] < OperandB.ChunkInt[A_p])
+			return ReturnPlus*-1;		//A<B
+		else {
+			//整数部分完全相等,继续比较浮点数部分
+			A_p = 0;		//将计数变量复位,开始比较小数位
+			if (*OperandA.flag&&*OperandB.flag&&*OperandA.ChunkFloat_C&&*OperandB.ChunkFloat_C) {
+				//两个数都是浮点数
+				B_p = *OperandA.ChunkFloat_C < *OperandB.ChunkFloat_C ? *OperandA.ChunkFloat_C : *OperandB.ChunkFloat_C;	//临时借用来存储最小Chunk数
+				//B_p = 1;
+				while (A_p < B_p-1 && OperandA.ChunkFloat[A_p] == OperandB.ChunkFloat[A_p])
+					A_p++;
+				if (OperandA.ChunkFloat[A_p] > OperandB.ChunkFloat[A_p])
+					return ReturnPlus;
+				else if (OperandA.ChunkFloat[A_p] < OperandB.ChunkFloat[A_p])
+					return ReturnPlus*-1;
+				else {
+					if (B_p == A_p) {
+						if (A_p < *OperandA.ChunkFloat_C)
+							while (A_p) {
+								if (OperandA.ChunkFloat[A_p]) return ReturnPlus;
+								A_p++;
+							}
+						else if (A_p < *OperandB.ChunkFloat_C)
+							while (A_p) {
+								if (OperandB.ChunkFloat[A_p])return ReturnPlus*-1;
+								A_p++;
+							}
+						else return 0;
+					}
+				}
+			}
+			else if (*OperandA.flag && !*OperandB.flag&&*OperandA.ChunkFloat_C) {
+				if (OperandA.ChunkFloat[A_p]) return ReturnPlus;
+			}
+			else if (!*OperandA.flag && *OperandB.flag&&*OperandB.ChunkFloat_C)
+				if (OperandB.ChunkFloat[A_p]) return ReturnPlus*-1;
+		}
+	}
+	return 0;
 }

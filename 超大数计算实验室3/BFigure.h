@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <cstdlib>
+#include <cstring>
 
 /*
 临时测试
@@ -30,11 +31,11 @@ public:
 	void StrToFig_Float(std::string String);
 	std::string toString();
 	friend void BFigureCopyer(BFigure &destin, const BFigure &Source, int CompleteCopy = 1);
-
+	friend int CompareBFigure(const BFigure &OperandA, const BFigure &OperandB);
 	friend void Add_Int(BFigure &Result, const BFigure &OperandA, const BFigure &OperandB);
 	friend void Add_Float(BFigure &Result, const BFigure &OperandA, const BFigure &OperandB);
 
-
+	//friend void Sub
 	//void Sub(BFigure SperandA, BFigure SperandB);
 
 	/*
@@ -51,6 +52,7 @@ public:
 	BFigure& operator=(const BFigure& rhs);
 	BFigure& BFigure::operator=(std::string NumString);	//将字符串写入到BFigure中
 	BFigure operator+(const BFigure& rhs);
+	BFigure operator-(const BFigure& rhs);
 
 	/*
 	+ - * / % = <<
@@ -70,6 +72,8 @@ protected:
 	friend void _Add_Int(BFigure &Result, const BFigure &OperandA, const BFigure &OperandB, int carry);
 	friend int _Add_Float(BFigure &Result, const BFigure &OperandA, const BFigure &OperandB);
 public:	//临时的
+	friend void _Sub_Int(BFigure&Result, const BFigure & OperandA, const BFigure & OperandB, int borrow);
+	friend int _Sub_Float(BFigure&Result, const BFigure & OperandA, const BFigure & OperandB);
 
 	friend int _GetRealLength_Int(const BFigure &Figure);
 	friend int _GetRealLength_Float(const BFigure &Figure);
