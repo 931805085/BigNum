@@ -139,7 +139,6 @@ BFigure::~BFigure(void)
 		delete flag;
 		delete pFigureCount;
 	}
-
 }
 
 /*
@@ -173,15 +172,32 @@ void BFigure::StrToFig_Float(std::string String)
 std::string BFigure::toString()
 {
 	char ChunkTemp[9];
-	char *returnVal;
-	if (*flag)
-		returnVal = new char[_GetRealLength_Int(*this) + _GetRealLength_Float(*this) + 3 + *this->Minus]();
-	else
-		returnVal = new char[_GetRealLength_Int(*this) + 1 + *this->Minus]();
+	char *returnVal = NULL;
+	int returnVal_len;
 
-	returnVal[0] = 0;
+	if (*flag)
+		returnVal_len = _GetRealLength_Int(*this) + _GetRealLength_Float(*this) + 3 + *this->Minus;
+	else
+		returnVal_len = _GetRealLength_Int(*this) + 1+ *this->Minus;
+	if (returnVal_len <= 0)
+		return NULL;
+	returnVal = new char[returnVal_len];
+
+	int a = *ChunkInt_C - 1;
+	while (ChunkInt[a] == 0)
+		a--;
+
+	int n = _ItoA(ChunkInt[a--], ChunkTemp, 9);
+	if (*Minus==1)
+	{
+		returnVal[0] = '-';
+		strcpy(returnVal + 1, &ChunkTemp[n]);	//写入前端
+	}
+	else
+		strcpy(returnVal, &ChunkTemp[n]);	//写入前端
+
 	if (*ChunkInt_C&&*ChunkInt) {		//显示整数部分
-		for (int a = *ChunkInt_C - 1; a >= 0; a--) {
+		for (; a >= 0; a--) {
 			_ChunktoStr_Int(ChunkInt[a], ChunkTemp);
 			strcat(returnVal, ChunkTemp);
 		}
@@ -194,11 +210,8 @@ std::string BFigure::toString()
 			strcat(returnVal, ChunkTemp);
 		}
 	}
-
-
 	std::string re = std::string(returnVal);
-	delete returnVal;
-
+	delete[] returnVal;
 	return re;
 }
 
@@ -220,13 +233,32 @@ void Add_Int(BFigure & Result, const BFigure & OperandA, const BFigure & Operand
 	}
 	else if ((!MinusA) && MinusB) {
 		//A正B负
-		//if ()
-		_Sub_Int(Result, OperandA, OperandB, 0);
+		if (_CompareBFigure(1,OperandA, OperandB) >= 0)
+		{
+			//2+(-1)
+			_Sub_Int(Result, OperandA, OperandB, 0);
+			*Result.Minus = 0;
+		}
+		else {
+			//2+(-3)
+			_Sub_Int(Result, OperandB, OperandA, 0);
+			*Result.Minus = 1;
+		}
 	}
 	else if (MinusA && (!MinusB)) {
 		//A负B正
-		_Sub_Int(Result, OperandB, OperandA, 0);
-
+		if (_CompareBFigure(1, OperandA, OperandB) > 0)
+		{
+			//(-3)+1
+			_Sub_Int(Result, OperandA, OperandB, 0);
+			*Result.Minus = 1;
+		}
+		else
+		{
+			//(-1)+3
+			_Sub_Int(Result, OperandB, OperandA, 0);
+			*Result.Minus = 0;
+		}
 	}
 	else {
 		//两个正数
@@ -294,20 +326,7 @@ void _Sub_Int(BFigure & Result, const BFigure & OperandA, const BFigure & Operan
 		else borrow = 0;
 		R_p++;
 	}
-	/*
-	while (R_p <= Bmax_p)
-	{
-		Result.ChunkInt[R_p] = OperandB.ChunkInt[R_p] + borrow;
-		if (Result.ChunkInt[R_p] > 9999)
-		{
-			carry = Result.ChunkInt[R_p] / 10000;
-			Result.ChunkInt[R_p] %= 10000;
-		}
-		else carry = 0;
-		R_p++;
-	}
-	*/
-	if (borrow)
+	if (borrow&&R_p < *Result.ChunkInt_C)
 		Result.ChunkInt[R_p++] = borrow;
 	while (R_p < *Result.ChunkInt_C)
 		Result.ChunkInt[R_p++] = 0;
@@ -405,7 +424,7 @@ void _Add_Int(BFigure &Result, const BFigure &OperandA, const BFigure &OperandB,
 		else carry = 0;
 		R_p++;
 	}
-	if (carry)
+	if (carry&&R_p < *Result.ChunkInt_C)
 		Result.ChunkInt[R_p++] = carry;
 	while (R_p < *Result.ChunkInt_C)
 		Result.ChunkInt[R_p++] = 0;
@@ -475,11 +494,15 @@ void BFigure::_StrToFig_Int(std::string String, int start_index, int end_index)
 	if (end_index - start_index + 1 > (*ChunkInt_C) * 4) {
 		if (ChunkInt) delete[] ChunkInt;
 		int CIC = (end_index - start_index + 1) / 4 + 1;
-		if (CIC)
+		if (CIC > 0) {
 			ChunkInt = new int[CIC];
-		else
-			ChunkInt = NULL;
-		*ChunkInt_C = CIC;
+			*ChunkInt_C = CIC;
+		}
+		else {
+			ChunkInt = new int[1]();
+			*ChunkInt_C = 1;
+			return;
+		}
 	}
 
 	for (int a = end_index; a >= start_index; a--) {
@@ -501,9 +524,10 @@ void BFigure::_StrToFig_Int(std::string String, int start_index, int end_index)
 		//发现有数据,进行保存
 		while (temp_p != -1)				//刷新字符串
 			temp[temp_p--] = ' ';
-		ChunkInt[ChunkInt_p++] = atoi(temp);
+		ChunkInt[ChunkInt_p] = atoi(temp);
+		ChunkInt_p++;
 	}
-	*ChunkInt_C = ChunkInt_p;				//记录Chunk的大小
+	//*ChunkInt_C = ChunkInt_p;				//记录Chunk的大小
 	return;
 }
 
@@ -522,11 +546,18 @@ void BFigure::_StrToFig_Float(std::string String, int start_index, int end_index
 	if (end_index - start_index > (*ChunkFloat_C) * 8) {
 		if (ChunkFloat) delete[] ChunkFloat;
 		int CFC = (end_index - start_index + 1) / 8 + 1;
-		if (CFC)
+		if (CFC) {
 			ChunkFloat = new int[CFC];
+			*ChunkFloat_C = CFC;
+		}
 		else
-			ChunkFloat = NULL;
-		*ChunkFloat_C = CFC;
+		{
+			ChunkFloat = new int[1]();
+			*ChunkFloat_C = 1;
+			return;
+		}
+
+
 	}
 
 	for (int a = start_index; a <= end_index; a++) {
@@ -543,7 +574,8 @@ void BFigure::_StrToFig_Float(std::string String, int start_index, int end_index
 		//还有已读取的数据没有处理,进行处理
 		while (temp_p <= 7)				//刷新字符串
 			temp[temp_p++] = '0';
-		ChunkFloat[ChunkFloat_p++] = atoi(temp);
+		ChunkFloat[ChunkFloat_p] = atoi(temp);
+		ChunkFloat_p++;
 	}
 	*ChunkFloat_C = ChunkFloat_p;
 	return;
@@ -644,7 +676,7 @@ BFigure BFigure::operator+(const BFigure & rhs)
 	int max_len_f = l_len > r_len ? l_len : r_len;	//浮点位不会增加
 
 	//初始化一个可以装得下结果的BFigure对象
-	BFigure Result((max_len_i / 4), (max_len_f / 8) + 1);
+	BFigure Result((max_len_i / 4) + 1, (max_len_f / 8) + 1);
 
 	if (*this->flag || *rhs.flag)
 		Add_Float(Result, *this, rhs);
@@ -682,7 +714,7 @@ void BFigureCopyer(BFigure &destin, const BFigure &Source, int CompleteCopy)
 
 	if (*Source.flag) {
 		//浮点数部分,特殊处理
-		if (CompleteCopy == 0 || (CompleteCopy&&_GetRealLength_Float(Source) > *destin.ChunkFloat_C * 8)) {
+		if (CompleteCopy == 0 || (CompleteCopy && (_GetRealLength_Float(Source) > *destin.ChunkFloat_C * 8))) {
 			if (destin.ChunkFloat)delete[] destin.ChunkFloat;//删除原来分配的内存,重新进行分配
 			destin.ChunkFloat = new int[*Source.ChunkFloat_C];
 			*destin.ChunkFloat_C = *Source.ChunkFloat_C;
@@ -692,7 +724,6 @@ void BFigureCopyer(BFigure &destin, const BFigure &Source, int CompleteCopy)
 			destin.ChunkFloat[a] = Source.ChunkFloat[a];
 		}
 	}
-
 }
 
 //************************内部函数定义区********************************
@@ -862,20 +893,8 @@ static int _CompareNumString(const char *StringA, const char *StringB)
 		return -100;
 }
 
-/*
-比较两个BFigure的大小
-OperandA>OperandB
-*/
 int CompareBFigure(const BFigure &OperandA, const BFigure &OperandB)
 {
-	int A_p = *OperandA.ChunkInt_C - 1;
-	while (!OperandA.ChunkInt[A_p] && A_p > 0)		//取得A最高位的下标
-		A_p--;
-
-	int B_p = *OperandB.ChunkInt_C - 1;
-	while (!OperandB.ChunkInt[B_p] && B_p > 0)		//取得B最高位的下标
-		B_p--;
-
 	int ReturnPlus;
 	if (*OperandA.Minus&&*OperandB.Minus)
 		ReturnPlus = -1;
@@ -884,6 +903,23 @@ int CompareBFigure(const BFigure &OperandA, const BFigure &OperandB)
 	else if (*OperandA.Minus == 0 && *OperandB.Minus)
 		return 1;
 	else ReturnPlus = 1;
+
+	return _CompareBFigure(ReturnPlus, OperandA, OperandB);
+}
+
+/*
+比较两个BFigure的大小
+OperandA>OperandB
+*/
+int _CompareBFigure(int ReturnPlus,const BFigure &OperandA, const BFigure &OperandB)
+{
+	int A_p = *OperandA.ChunkInt_C - 1;
+	while (!OperandA.ChunkInt[A_p] && A_p > 0)		//取得A最高位的下标
+		A_p--;
+
+	int B_p = *OperandB.ChunkInt_C - 1;
+	while (!OperandB.ChunkInt[B_p] && B_p > 0)		//取得B最高位的下标
+		B_p--;
 
 	if (A_p > B_p)
 		return ReturnPlus;		//A远大于B
@@ -905,7 +941,7 @@ int CompareBFigure(const BFigure &OperandA, const BFigure &OperandB)
 				//两个数都是浮点数
 				B_p = *OperandA.ChunkFloat_C < *OperandB.ChunkFloat_C ? *OperandA.ChunkFloat_C : *OperandB.ChunkFloat_C;	//临时借用来存储最小Chunk数
 				//B_p = 1;
-				while (A_p < B_p-1 && OperandA.ChunkFloat[A_p] == OperandB.ChunkFloat[A_p])
+				while (A_p < B_p - 1 && OperandA.ChunkFloat[A_p] == OperandB.ChunkFloat[A_p])
 					A_p++;
 				if (OperandA.ChunkFloat[A_p] > OperandB.ChunkFloat[A_p])
 					return ReturnPlus;

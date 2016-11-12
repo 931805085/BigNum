@@ -69,6 +69,7 @@ protected:
 	void _StrToFig_Float(std::string, int start_index, int end_index);
 	void _StrToFig_Int(std::string String, int start_index, int end_index);
 
+	friend int _CompareBFigure(int ReturnPlus, const BFigure &OperandA, const BFigure &OperandB);
 	friend void _Add_Int(BFigure &Result, const BFigure &OperandA, const BFigure &OperandB, int carry);
 	friend int _Add_Float(BFigure &Result, const BFigure &OperandA, const BFigure &OperandB);
 public:	//ÁÙÊ±µÄ
